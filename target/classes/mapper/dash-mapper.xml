@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD mapper 3.0//EN" "Http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+
+
+<mapper namespace="dashList">
+
+	
+<select id="boardTotalCount" parameterType="map" resultType="int">
+		select count(*) from ${boardname} 
+	</select>
+	
+<select id="boardMonthCount" parameterType="map" resultType="int">
+		select count(*) as count from ${boardname} where to_char(wdate, 'yy/mm') = to_char(sysdate, 'yy/mm')
+	</select>
+	
+<select id="boardWeekCount" parameterType="map" resultType="int">
+		select count(*) as count from ${boardname} where to_char(wdate,'IW') = to_char(SYSDATE,'IW')
+	</select>
+	
+<select id="boardDayCount" parameterType="map" resultType="int">
+		select count(*) as count from ${boardname} where to_char(wdate, 'yy/mm/dd') = to_char(sysdate, 'yy/mm/dd')
+	</select>	
+		
+	
+	
+<select id="boardMonthGRF" parameterType="map" resultType="DashBoardDTO">
+
+	select nvl(count2,0) as count
+	from
+	( SELECT COUNT(*) as count2, to_char(wdate,'yyyymmdd') as sdate FROM ${boardname} GROUP BY to_char(wdate,'yyyymmdd'))
+	right outer join (SELECT TO_CHAR(TRUNC(sysdate,'MM')+LEVEL-1, 'YYYYMMDD') as wdate FROM DUAL
+	connect by level &lt;= (LAST_DAY(sysdate)-TRUNC(sysdate,'MM')+1))
+	on sdate=wdate
+	ORDER BY wdate
+	</select>	
+	
+<select id="boardWeekGRF" parameterType="map" resultType="DashBoardDTO">
+
+	select nvl(count2,0) as count
+	from
+	( SELECT COUNT(*) as count2, to_char(wdate,'yyyymmdd') as sdate FROM ${boardname} GROUP BY to_char(wdate,'yyyymmdd'))
+	right outer join (SELECT TO_CHAR((sysdate-( (select to_char(sysdate,'D') from dual) -2 )) +LEVEL-1, 'YYYYMMDD') as wdate FROM DUAL
+	connect by level &lt;= ((sysdate-( (select to_char(sysdate,'D') from dual) -2 )+6)-(sysdate-( (select to_char(sysdate,'D') from dual) -2 )) +1))
+	on sdate=wdate
+	ORDER BY wdate
+	</select>		
+		
+<select id="boardDayGRF" parameterType="map" resultType="DashBoardDTO">
+
+	select nvl(count2,0) as count
+	from
+	( SELECT COUNT(*) as count2, to_char(wdate,'yyyymmdd hh24') as sdate FROM ${boardname} GROUP BY to_char(wdate,'yyyymmdd hh24'))
+	right outer join (SELECT TO_CHAR(TRUNC(sysdate+1,'dd')+(LEVEL/24*1-1), 'YYYYMMDD hh24') as wdate FROM DUAL
+	connect by level &lt;= (TRUNC(sysdate,'MM')+24-TRUNC(sysdate,'MM')))
+	on sdate=wdate
+	ORDER BY wdate
+
+	</select>		
+		
+
+
+</mapper>

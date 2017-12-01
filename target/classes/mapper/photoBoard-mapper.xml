@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="photoboard">
+
+<select id="all" resultType="PhotoBoardDTO" parameterType="int">
+select * from (select inner.*,rownum num from (select idx, title, content, m.user_nick, wdate, hit,available  from photo_board p, member m 
+												where p.user_id = m.user_id and available=0 order by p.wdate desc) inner) 
+where num between (#{pageNum}-1)*9+1 and #{pageNum}*9
+
+</select>
+
+<select id="best" resultType="PhotoBoardDTO" parameterType="int">
+select comment_count,bad,good, b.idx, title, content, m.user_nick 
+from (select inner.*, rownum num from (select count(good) good, board_idx 
+										from photo_recommend r, photo_board b 
+										where r.board_idx = b.idx and good=1 and available=0 
+										group by board_idx order by good desc) inner) a, member m, photo_board b,
+										(select count(*) as comment_count,board_idx	from photo_comment	where available=0	group by board_idx) c,
+										(select count(bad) bad, board_idx	from photo_recommend r, photo_board b	where r.board_idx = b.idx and bad= 1 and available=0 group by board_idx) d
+
+where m.user_id = b.user_id
+and b.idx = a.board_idx
+and b.idx = d.board_idx(+)
+and c.board_idx(+) = b.idx
+and num between 1 and 5 
+order by num
+</select>
+
+<select id="realTimePhoto" resultType="PhotoBoardDTO">
+	select * from (select p.*, rownum num from (select * from photo_board p where available=0 order by wdate desc) p) where num between 1 and 3 
+</select>
+
+<insert id="insert" parameterType="PhotoBoardDTO" >
+insert into photo_board values(photo_board_seq.nextval, #{title}, #{content}, #{user_id}, sysdate,  0, 0)
+</insert>
+
+<update id="modify" parameterType="PhotoBoardDTO">
+update photo_board set title=#{title}, content=#{content} where idx=#{idx}
+</update>
+
+<update  id="delete"  parameterType="int">
+update photo_board set available=1 where idx=#{idx}
+</update>
+
+<update id="deleteComment" parameterType="int">
+	update photo_comment set available = 1 where board_idx= #{idx}
+</update>
+
+<!-- 게시판 검색 sql  -->
+<select id="search" resultType="PhotoBoardDTO" parameterType="java.util.Map">
+select * 
+from (select inner.*,rownum num 
+		from (select idx, title, content, m.user_nick, wdate, hit from photo_board s , member m 
+where s.user_id = m.user_id and available=0
+order by wdate desc) inner
+<where>
+<if test="title!=null">
+	upper(title) like upper(#{keyword})
+</if>
+<if test="content!=null">
+	upper(REGEXP_REPLACE(content, <![CDATA['<[^>]*>|\&([^;])*;']]>)) like upper(#{keyword})
+</if>
+<if test="user_nick!=null">
+	upper(user_nick) like upper(#{keyword})
+</if>
+<if test="all!=null">
+	upper(title) like upper(#{keyword})
+	or upper(REGEXP_REPLACE(content, <![CDATA['<[^>]*>|\&([^;])*;']]>)) like upper(#{keyword})
+	or upper(user_nick) like upper(#{keyword})
+</if>
+</where>
+) 
+where num between (#{pageNum}-1)*9+1 and #{pageNum}*9 
+
+</select>
+
+<select id="searchPaging" resultType="int" parameterType="java.util.Map">
+select count(*) from (select idx, title, content, m.user_nick, wdate, hit from photo_board s , member m where s.user_id = m.user_id and available=0) 
+<where>
+<if test="title!=null">
+	upper(title) like upper(#{keyword})
+</if>
+<if test="content!=null">
+	upper(content) like upper(#{keyword})
+</if>
+<if test="user_nick!=null">
+	upper(user_nick) like upper(#{keyword})
+</if>
+<if test="all!=null">
+	upper(title) like upper(#{keyword})
+	or upper(content) like upper(#{keyword})
+	or upper(user_nick) like upper(#{keyword})
+</if>
+</where>
+</select>
+
+<select id="detail" resultType="PhotoBoardDTO" parameterType="int">
+
+select idx ,title, content, m.user_nick, wdate, hit 
+from photo_board p, member m 
+where p.user_id = m.user_id
+and idx=#{idx}
+</select> 
+
+<select id="sumnail" resultType="String" parameterType="int">
+select content from photo_board where idx=#{idx}
+</select> 
+
+<!-- 게시글 신고  -->
+<insert id="insertReport" parameterType="java.util.Map">
+	insert into <if test="tableName=='board'">photo_report</if><if test="tableName=='comment'">photo_comment_report</if> 
+	values(<if test="tableName=='board'">photo_report_seq.nextval</if><if test="tableName=='comment'">photo_comment_report_seq.nextval</if>,#{idx},#{content},#{user_id},sysdate)
+</insert>
+
+<select id="checkReport" parameterType="java.util.Map" resultType="int">
+	select count(*) from <if test="tableName=='board'">photo_report</if><if test="tableName=='comment'">photo_comment_report</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>  = #{idx} and user_id = #{user_id}
+</select>
+
+<select id="selectCommentIdx" parameterType="java.util.Map" resultType="int">
+select c.idx from photo_board b,photo_comment c 
+where b.idx = c.board_idx
+and board_idx = #{idx}
+order by comment_group asc, indent asc, c.wdate asc
+</select>
+
+<select id="checkWriter" parameterType="int" resultType="String">
+	select user_id from photo_board where idx = #{idx}
+</select>
+
+<insert id="insertRecommend" parameterType="java.util.Map">
+	insert into <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if> 
+	values(<if test="tableName=='board'">photo_recommend_seq.nextval</if><if test="tableName=='comment'">photo_comment_recommend_seq.nextval</if>, #{idx} ,#{user_id},<if test="good!=null">1</if><if test="good==null">0</if>,
+	<if test="bad!=null">1</if><if test="bad==null">0</if>)
+</insert>
+
+<update id="updateRecommend" parameterType="java.util.Map">
+update <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if>
+set <if test="good!=null">good=1</if><if test="bad!=null">bad=1</if>
+where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</update>
+
+<select id="checkRecommend" parameterType="java.util.Map" resultMap="RecommendResultMap">
+	select good,bad from <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</select>
+<select id="checkRecommend2" parameterType="java.util.Map" resultType="int">
+	select count(*) from <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</select>
+
+<resultMap type="java.util.Map" id="RecommendResultMap">
+<result column="good" property="good" javaType="int"/>
+<result column="bad" property="bad" javaType="int"/>
+</resultMap>
+
+<select id="selectRecommendGood" parameterType="java.util.Map" resultType="int">
+	select count(good) from <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if>
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if> = #{idx} and good=1
+</select>
+<select id="selectRecommendBad" parameterType="java.util.Map" resultType="int">
+	select count(bad) from <if test="tableName=='board'">photo_recommend</if><if test="tableName=='comment'">photo_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if> = #{idx} and bad=1
+</select>
+
+</mapper>

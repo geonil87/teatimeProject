@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="notices">
+
+<select id="all" parameterType="int" resultType="NoticesBoardDTO">
+	select b.*, m.user_nick 
+	from	(select inner.*, rownum as num from (select * from notices_board where available=0 order by wdate desc) inner) b, member m
+	where b.user_id = m.user_id
+	and num between (#{pageNum}-1)*20+1 and #{pageNum}*20
+</select>
+
+<select id="paging" resultType="int">
+	select count(*) from notices_board where available=0
+</select>
+
+<insert id="insert" parameterType="NoticesBoardDTO">
+	insert into notices_board values(notices_board_seq.nextval, #{category}, #{importance},#{title},#{content},#{user_id},sysdate,0,0)
+</insert>
+
+<select id="detail" parameterType="int" resultType="NoticesBoardDTO">
+	select idx ,title, content, m.user_nick, wdate, hit 
+	from notices_board s, member m 
+	where s.user_id = m.user_id
+	and idx=#{idx}
+</select>
+
+<update id="plus" parameterType="int">
+	update notices_board set hit= hit+1 where idx = #{idx}
+</update>
+
+<update id="modify" parameterType="NoticesBoardDTO">
+update notices_board set title=#{title}, content=#{content}, category=#{category}, importance=#{importance} where idx=#{idx}
+</update>
+
+<update  id="delete"  parameterType="int">
+	update notices_board set available= 1 where idx=#{idx}	
+</update>
+
+<select id="importance" resultType="NoticesBoardDTO">
+	select * from (select inner.*, rownum as num from (select * from notices_board where importance = 1 and available=0 order by wdate desc) inner) inner2, member m
+	where inner2.user_id = m.user_id
+	and num between 1 and 3
+</select>
+
+</mapper>

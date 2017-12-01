@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="mediaboard">
+
+<select id="all" resultType="MediaBoardDTO" parameterType="int">
+select * from (select inner.*,rownum num from (select idx, title, content, m.user_nick, wdate, hit,available  from media_board p, member m 
+												where p.user_id = m.user_id and available=0 order by p.wdate desc) inner) 
+where num between (#{pageNum}-1)*9+1 and #{pageNum}*9
+
+</select>
+
+<select id="best" resultType="MediaBoardDTO" parameterType="int">
+<!-- select * from (select p.*, rownum num from (select * from media_board p order by wdate desc) p) where num between 1 and 5 -->
+select comment_count,bad,good, b.idx, title, content, m.user_nick 
+from (select inner.*, rownum num from (select count(good) good, board_idx 
+										from media_recommend r, media_board b 
+										where r.board_idx = b.idx and good=1 and available=0 
+										group by board_idx order by good desc) inner) a, member m, media_board b,
+										(select count(*) as comment_count,board_idx	from media_comment	where available=0	group by board_idx) c,
+										(select count(bad) bad, board_idx	from media_recommend r, media_board b	where r.board_idx = b.idx and bad= 1 and available=0 group by board_idx) d
+
+where m.user_id = b.user_id
+and b.idx = a.board_idx
+and b.idx = d.board_idx(+)
+and c.board_idx(+) = b.idx
+and num between 1 and 5 
+order by num
+</select>
+
+<insert id="insert" parameterType="MediaBoardDTO" >
+insert into media_board values(media_board_seq.nextval, #{title}, #{content}, #{user_id}, sysdate,  0, 0)
+</insert>
+
+<update id="modify" parameterType="MediaBoardDTO">
+update media_board set title=#{title}, content=#{content} where idx=#{idx}
+</update>
+
+<update  id="delete"  parameterType="int">
+update media_board set available=1 where idx=#{idx}
+</update>
+
+<update id="deleteComment" parameterType="int">
+	update media_comment set available = 1 where board_idx= #{idx}
+</update>
+
+<!-- 게시판 검색 sql  -->
+<select id="search" resultType="MediaBoardDTO" parameterType="java.util.Map">
+select * 
+from (select inner.*,rownum num 
+		from (select idx, title, content, m.user_nick, wdate, hit from media_board s , member m 
+where s.user_id = m.user_id and available=0
+order by wdate desc) inner
+<where>
+<if test="title!=null">
+	upper(title) like upper(#{keyword})
+</if>
+<if test="content!=null">
+	upper(REGEXP_REPLACE(content, <![CDATA['<[^>]*>|\&([^;])*;']]>)) like upper(#{keyword})
+</if>
+<if test="user_nick!=null">
+	upper(user_nick) like upper(#{keyword})
+</if>
+<if test="all!=null">
+	upper(title) like upper(#{keyword})
+	or upper(REGEXP_REPLACE(content, <![CDATA['<[^>]*>|\&([^;])*;']]>)) like upper(#{keyword})
+	or upper(user_nick) like upper(#{keyword})
+</if>
+</where>
+) 
+where num between (#{pageNum}-1)*9+1 and #{pageNum}*9 
+
+</select>
+
+<select id="searchPaging" resultType="int" parameterType="java.util.Map">
+select count(*) from (select idx, title, content, m.user_nick, wdate, hit from media_board s , member m where s.user_id = m.user_id and available=0) 
+<where>
+<if test="title!=null">
+	upper(title) like upper(#{keyword})
+	
+</if>
+<if test="content!=null">
+	upper(content) like upper(#{keyword})
+</if>
+<if test="user_nick!=null">
+	upper(user_nick) like upper(#{keyword})
+</if>
+<if test="all!=null">
+	upper(title) like upper(#{keyword})
+	or upper(content) like upper(#{keyword})
+	or upper(user_nick) like upper(#{keyword})
+</if>
+</where>
+</select>
+
+
+<select id="detail" resultType="MediaBoardDTO" parameterType="int">
+
+select idx ,title, content, m.user_nick, wdate, hit 
+from media_board p, member m 
+where p.user_id = m.user_id
+and idx=#{idx}
+</select> 
+
+<select id="sumnail" resultType="String" parameterType="int">
+select content from media_board where idx=#{idx}
+</select> 
+
+<!-- 게시글 신고  -->
+<insert id="insertReport" parameterType="java.util.Map">
+	insert into <if test="tableName=='board'">media_report</if><if test="tableName=='comment'">media_comment_report</if> 
+	values(<if test="tableName=='board'">media_report_seq.nextval</if><if test="tableName=='comment'">media_comment_report_seq.nextval</if>,#{idx},#{content},#{user_id},sysdate)
+</insert>
+
+<select id="checkReport" parameterType="java.util.Map" resultType="int">
+	select count(*) from <if test="tableName=='board'">media_report</if><if test="tableName=='comment'">media_comment_report</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>  = #{idx} and user_id = #{user_id}
+</select>
+
+<select id="selectCommentIdx" parameterType="java.util.Map" resultType="int">
+select c.idx from media_board b,media_comment c 
+where b.idx = c.board_idx
+and board_idx = #{idx}
+order by comment_group asc, indent asc, c.wdate asc
+</select>
+
+<select id="checkWriter" parameterType="int" resultType="String">
+	select user_id from media_board where idx = #{idx}
+</select>
+
+<insert id="insertRecommend" parameterType="java.util.Map">
+	insert into <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if> 
+	values(<if test="tableName=='board'">media_recommend_seq.nextval</if><if test="tableName=='comment'">media_comment_recommend_seq.nextval</if>, #{idx} ,#{user_id},<if test="good!=null">1</if><if test="good==null">0</if>,
+	<if test="bad!=null">1</if><if test="bad==null">0</if>)
+</insert>
+
+<update id="updateRecommend" parameterType="java.util.Map">
+update <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if>
+set <if test="good!=null">good=1</if><if test="bad!=null">bad=1</if>
+where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</update>
+
+<select id="checkRecommend" parameterType="java.util.Map" resultMap="RecommendResultMap">
+	select good,bad from <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</select>
+<select id="checkRecommend2" parameterType="java.util.Map" resultType="int">
+	select count(*) from <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if>=#{idx} and user_id=#{user_id}
+</select>
+
+<resultMap type="java.util.Map" id="RecommendResultMap">
+<result column="good" property="good" javaType="int"/>
+<result column="bad" property="bad" javaType="int"/>
+</resultMap>
+
+<select id="selectRecommendGood" parameterType="java.util.Map" resultType="int">
+	select count(good) from <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if>
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if> = #{idx} and good=1
+</select>
+<select id="selectRecommendBad" parameterType="java.util.Map" resultType="int">
+	select count(bad) from <if test="tableName=='board'">media_recommend</if><if test="tableName=='comment'">media_comment_recommend</if> 
+	where <if test="tableName=='board'">board_idx</if><if test="tableName=='comment'">comment_idx</if> = #{idx} and bad=1
+</select>
+
+</mapper>

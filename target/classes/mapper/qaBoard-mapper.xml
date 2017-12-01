@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD mapper 3.0//EN" "Http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="qaboard">
+	<!--========================== 관리자 =================================================== -->
+	<!-- (관리자용)문의 게시판 리스트 출력 (답변대기) -->
+	
+	
+	<select id="getCountAdminOption" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		FROM qa_board qa, member m
+		WHERE qa.user_id = m.user_id
+		<choose>
+			<when test="condition != 0">AND qa.condition = #{condition}</when>
+		</choose>
+        <choose>
+			<when test="permission != ''">AND qa.permission = #{permission}</when>
+		</choose>
+		<choose>
+			<when test="category != 0">AND category = #{category}</when>
+		</choose>
+		<choose>
+			<when test="searchOption.equals('userNick') and keyword != ''">AND m.user_nick like '%'||#{keyword}||'%'</when>
+		</choose>
+	</select>
+	
+	
+	<select id="getListAdminOption" parameterType="java.util.Map" resultType="QaBoardDTO">
+		SELECT * FROM
+		(SELECT rownum as viewIdx, inner.* FROM
+		(SELECT idx, category, qa_group, title, content, m.user_nick AS userNick, wdate, condition, permission
+		FROM qa_board qa, member m
+		WHERE qa.user_id = m.user_id
+		<choose>
+			<when test="condition != 0">AND qa.condition = #{condition}</when>
+		</choose>
+		<choose>
+			<when test="permission != ''">AND qa.permission = #{permission}</when>
+		</choose>
+		<choose>
+			<when test="category != 0">AND qa.category = #{category}</when>
+		</choose>
+		<choose>
+			<when test="searchOption.equals('userNick') and keyword != ''">AND m.user_nick like '%'||#{keyword}||'%'</when>
+		</choose>
+		ORDER BY wdate
+		<choose>
+			<when test="range == 1">ASC</when>
+			<when test="range == 2">DESC</when>
+		</choose>
+		, idx desc) inner)
+	<!-- 	WHERE viewIdx BETWEEN #{startContent} AND #{endContent} -->
+	</select>
+	
+	
+		
+		
+	<!--========================== 유저 =================================================== -->	
+		
+	<!-- (유저용)문의 게시판 리스트 출력 -->
+	<select id="getCountUser" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		FROM qa_board
+		WHERE user_id = #{userId}
+		<choose>
+			<when test="condition != 0">AND condition = #{condition}</when>
+		</choose>
+		<choose>
+			<when test="category != 0">AND category = #{category}</when>
+		</choose>
+	</select>
+	
+	<select id="getListUser" parameterType="java.util.Map" resultType="QaBoardDTO">
+		SELECT * FROM
+		(SELECT rownum as viewIdx, inner.* FROM
+		(SELECT idx, category, qa_group, title, content, m.user_nick AS userNick, wdate, condition 
+		FROM qa_board qa, member m
+		WHERE qa.user_id = m.user_id
+		<choose>
+			<when test="condition != 0">AND qa.condition = #{condition}</when>
+		</choose>
+		AND m.user_id = #{userId} 
+		<choose>
+			<when test="category != 0">AND qa.category = #{category}</when>
+		</choose>
+		ORDER BY wdate
+		<choose>
+			<when test="range == 1">ASC</when>
+			<when test="range == 2">DESC</when>
+		</choose>
+		, idx desc) inner)
+		WHERE viewIdx BETWEEN #{startContent} AND #{endContent}
+	</select>
+	
+	<!-- 질문 내용 가져오기 -->
+	<select id="getQuestionDetail" parameterType="int" resultType="QaBoardDTO">
+		SELECT idx, category, qa_group as qaGroup, title, content, m.user_nick AS userNick, wdate, condition, permission
+		FROM qa_board qa, member m 
+		WHERE qa.user_id = m.user_id
+		AND idx = #{idx}
+	</select>
+	
+	<!-- 질문 내용 수정하기 -->
+	<update id="modifyQuestionDetail" parameterType="QaBoardDTO">
+		UPDATE qa_board
+		SET category=#{category}, title=#{title}, content=#{content}, wdate = sysdate
+		WHERE idx=#{idx}
+	</update>
+	
+	<!-- 질문 내용 삭제하기 -->
+	<update id="deleteQuestion" parameterType="int">
+		UPDATE qa_board
+		SET condition=3, wdate = sysdate
+		WHERE qa_group = #{idx}
+		AND condition != 3
+	</update>
+	
+	<!-- 답변 내용 가져오기  -->
+	<select id="getAnswerDetail" parameterType="int" resultType="QaBoardDTO">
+		SELECT idx, category, qa_group as qaGroup, title, content, m.user_nick AS userNick, wdate, condition, permission
+		FROM qa_board qa, member m
+		WHERE qa.user_id = m.user_id 
+		AND qa.qa_group=#{qaGroup} 
+		AND qa.condition = 2 
+		AND qa.permission = 0
+	</select>
+	
+	<!-- 문의게시판 질문등록 (Question) -->
+	<insert id="insertQuestion" parameterType="QaBoardDTO">
+		INSERT INTO qa_board 
+		VALUES(qaBoard_seq.nextval,#{category},qaBoard_seq.currval,#{title},#{content},#{userId},sysdate,1,1)
+	</insert>
+
+	<!-- @@@@@@@@@@@@@@@@@@@@@@@ 답변 @@@@@@@@@@@@@@@@@@@@@@@@@ -->
+
+	<!-- 답변 등록시 질문글 condition 변경 -->
+	<update id="setQuestionCondition" parameterType="int">
+		UPDATE qa_board
+		SET condition = 2, wdate = sysdate
+		WHERE idx=#{idx}
+		AND permission = 1
+	</update>
+	
+	<!-- 답변 삭제시 질문글 condition 변경 -->
+	<update id="setQuestionConditionDelete" parameterType="int">
+		UPDATE qa_board
+		SET condition = 1, wdate = sysdate
+		WHERE idx=#{groupIdx}
+		AND qa_group=#{groupIdx}
+		AND permission = 1
+	</update>
+	
+	<!-- 문의 게시판 답변 등록(Answer) -->
+	<insert id="insertAnswer" parameterType="QaBoardDTO">
+		INSERT INTO qa_board 
+		VALUES(qaBoard_seq.nextval,#{category},#{qaGroup},#{title},#{content},#{userId},sysdate,2,0)
+	</insert>
+
+	<!-- 문의 내용 수정하기 -->
+	<update id="modifyAnswerDetail" parameterType="QaBoardDTO">
+		UPDATE qa_board
+		SET category=#{category}, title=#{title}, content=#{content}, wdate = sysdate
+		WHERE idx = #{idx}
+	</update>
+	
+	<!-- 문의 내용 삭제하기 -->
+	<update id="deleteAnswer" parameterType="int">
+		UPDATE qa_board
+		SET condition=3, wdate = sysdate
+		WHERE QA_GROUP=#{idx}
+		AND idx!=#{idx}
+	</update>
+
+
+
+
+
+	
+</mapper>
+
+
+
+

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE configuration PUBLIC "-//mybatis.org/DTD config 3.0//EN" "Http://mybatis.org/dtd/mybatis-3-config.dtd">
+
+<configuration>
+	<!-- 선택적인 항목 -->
+	<typeAliases>
+		<typeAlias type="board.dto.StoryBoardDTO" alias="StoryBoardDTO" />
+		<typeAlias type="board.dto.PhotoBoardCommentDTO" alias="PhotoBoardCommentDTO" />
+		<typeAlias type="board.dto.PhotoBoardDTO" alias="PhotoBoardDTO" />
+		<typeAlias type="board.dto.QaBoardDTO" alias="QaBoardDTO" />
+		<typeAlias type="board.dto.StoryBoardCommentDTO" alias="StoryBoardCommentDTO" />
+		<typeAlias type="board.dto.BoardCommentRecommendDTO" alias="BoardCommentRecommendDTO" />
+		<typeAlias type="board.dto.MediaBoardDTO" alias="MediaBoardDTO" />
+		<typeAlias type="board.dto.MediaBoardCommentDTO" alias="MediaBoardCommentDTO"/>
+		<typeAlias type="member.dto.MemberDTO" alias="MemberDTO" />
+		<typeAlias type="admin.dto.DashBoardDTO" alias="DashBoardDTO" />
+		<typeAlias type="admin.dto.LoginLogDTO" alias="LoginLogDTO" />
+		<typeAlias type="admin.dto.BlackListDTO" alias="BlackListDTO" />
+		<typeAlias type="admin.dto.ResignListDTO" alias="ResignListDTO" />
+		<typeAlias type="admin.dto.ReportListDTO" alias="ReportListDTO" />
+		<typeAlias type="board.dto.NoticesBoardDTO" alias="NoticesBoardDTO" />
+	</typeAliases>
+
+</configuration>

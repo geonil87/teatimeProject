@@ -1,0 +1,434 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org/DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="adminManage">
+
+	
+	<!--@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@[ 유 저 관 리 ]@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@-->
+	
+	<select id="getListTotalCount" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		FROM member
+		WHERE (user_permission=1 OR user_permission=2)
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				AND user_nick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				AND user_name like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%' OR user_nick like '%'||#{keyword}||'%' OR user_name like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+	</select>
+	
+	<select id="getMemberList" parameterType="java.util.Map" resultType="MemberDTO">
+		SELECT * FROM
+		(SELECT rownum as idx, inner.* FROM 
+		(SELECT user_id as userId, user_nick as userNick, user_name as userName, user_permission as userPermission 
+		FROM member 
+		WHERE (user_permission=1 OR user_permission=2)
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				AND user_Id like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				AND user_Nick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				AND user_Name like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				AND user_Id like '%'||#{keyword}||'%' OR user_Nick like '%'||#{keyword}||'%' OR user_Name like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+		ORDER BY user_Name asc, user_id asc, user_Nick asc) inner)
+		WHERE idx BETWEEN #{startContent} AND #{endContent}
+	</select>
+	
+	<select id="getMemberInfo" parameterType="String" resultType="MemberDTO">
+		SELECT user_id as userId, user_pw as userPw, user_name as userName, user_nick as userNick, user_phone as userPhone, user_email as userEmail, user_Postcode as userPostcode, user_address1 as userAddress1, user_address2 as userAddress2, user_gender as userGender, user_birthday as userBirthday, user_indate as userIndate, user_permission as userPermission
+		FROM member
+		WHERE user_id = #{userId}
+	</select>
+	
+	<select id="getLoginLogCount" parameterType="String" resultType="int">
+		SELECT count(*)
+		FROM userlog
+		WHERE user_id = #{userId}
+	</select>
+	
+	<select id="getLoginLog" parameterType="java.util.Map" resultType="LoginLogDTO">
+		SELECT * FROM
+		(SELECT rownum as idx, inner.* FROM 
+		(SELECT user_id as userId, user_ip as userIP, log_condition as logCondition, wdate
+		FROM userlog
+		WHERE user_id = #{userId} 
+		ORDER BY wdate desc) inner)
+		WHERE idx BETWEEN #{startContent} AND #{endContent}
+	</select>
+
+	<update id="modifyMemberInfo" parameterType="MemberDTO">
+		UPDATE member
+		SET <if test="userPw != ''">user_pw=#{userPw},</if> user_nick=#{userNick}, user_email=#{userEmail}, user_name=#{userName}, user_birthday=#{userBirthday}, user_phone=#{userPhone}, user_postcode=#{userPostcode}, user_address1=#{userAddress1}, user_address2=#{userAddress2}, user_gender=#{userGender}
+		WHERE user_id = #{userId}
+	</update>
+	
+	<update id="modifyMemberStatus" parameterType="MemberDTO">
+		UPDATE member
+		SET user_permission = #{userPermission}, user_suspend = ' '
+		WHERE user_id = #{userId}
+	</update>
+	
+	<resultMap type="java.util.Map" id="reportCount">
+		<result column="trc" property="total"/>
+		<result column="src" property="story"/>
+		<result column="prc" property="photo"/>
+		<result column="mrc" property="media"/>
+	</resultMap>
+	
+	<select id="getReportCount" parameterType="String" resultMap="reportCount">
+	SELECT sb.r + sc.r + pb.r + pc.r + mb.r + mc.r AS trc, sb.r + sc.r AS src, pb.r + pc.r AS prc, mb.r + mc.r AS mrc 
+	FROM (select count(*) r from story_board a, story_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) sb, 
+	(select count(*) r from story_comment a, story_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) sc,
+	(select count(*) r from photo_board a, photo_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) pb,
+	(select count(*) r from photo_comment a, photo_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) pc,
+	(select count(*) r from media_board a, media_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) mb,
+	(select count(*) r from media_comment a, media_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) mc
+	</select>
+	
+	<resultMap type="java.util.Map" id="qaBoardCount">
+		<result column="totalcount" property="totalCount"/>
+		<result column="clearcount" property="clearCount"/>
+	</resultMap>
+	
+	<select id="getMemberQaBoardCount" parameterType="String" resultMap="qaBoardCount">
+		SELECT t.totalcount, c.clearcount
+		FROM
+		(SELECT count(*) AS totalcount FROM qa_board WHERE user_id = #{userId} AND CONDITION <![CDATA[<]]> 3) t,
+		(SELECT count(*) AS clearcount FROM qa_board WHERE user_id = #{userId} AND CONDITION = 2) c	
+	</select>
+	
+	<update id="setResignMember" parameterType="String">
+		UPDATE member
+		SET 
+		user_permission = 99, 
+		user_indate = sysdate,
+		user_suspend = ' '
+        WHERE user_id=#{userId}
+	</update>
+	
+	<update id="setSuspendCause" parameterType="java.util.Map">
+		UPDATE member
+		SET user_suspend = #{suspendCause}
+		WHERE user_id = #{userId}
+	</update>
+	
+	<select id="getSuspendCause" parameterType="String" resultType="String">
+		SELECT user_suspend
+		FROM member
+		WHERE user_id = #{userId}
+	</select>
+	
+	
+	<!--@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@[ 블 랙 리 스 트 ]@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@-->
+	
+	<select id="getBlackListTotalCount" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		FROM(
+		SELECT m.user_id, m.user_nick, m.user_name, m.user_permission, nvl(ttt.reportcount,0) report_count
+		FROM member m,
+		(select total.user_id userId, SUM(ReportCount) reportcount FROM
+		(
+		select a.user_id, count(*) ReportCount from story_board a, story_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id 
+		UNION ALL
+		select a.user_id, count(*) ReportCount from story_comment a, story_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from photo_board a, photo_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from photo_comment a, photo_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from media_board a, media_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from media_comment a, media_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		) total
+		group by total.user_id) ttt 
+		WHERE m.user_id = ttt.userid
+		)
+		WHERE (user_permission != 0 AND user_permission != 99)
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				AND user_nick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				AND user_name like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%' OR user_nick like '%'||#{keyword}||'%' OR user_name like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+	</select>
+	
+		
+	<select id="getBlackList" parameterType="java.util.Map" resultType="BlackListDTO">
+		SELECT * FROM 
+		(SELECT rownum as idx, inner2.* FROM
+		(SELECT inner.* FROM 
+		(SELECT m.user_id userId, m.user_nick userNick, m.user_name userName, m.user_permission userPermission, nvl(ttt.reportcount,0) reportCount
+		FROM member m,
+		(select total.user_id userId, SUM(ReportCount) reportCount FROM
+		(
+		select a.user_id, count(*) ReportCount from story_board a, story_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id 
+		UNION ALL
+		select a.user_id, count(*) ReportCount from story_comment a, story_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from photo_board a, photo_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from photo_comment a, photo_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from media_board a, media_report b where a.idx=b.board_idx and a.available=0 GROUP BY a.user_id
+		UNION ALL
+		select a.user_id, count(*) ReportCount from media_comment a, media_comment_report b where a.idx=b.comment_idx and a.available=0 GROUP BY a.user_id
+		) total
+		group by total.user_id) ttt 
+		WHERE m.user_id = ttt.userid
+		AND (user_permission != 0 AND user_permission != 99)
+		ORDER BY reportCount desc, user_Name asc, user_id asc, user_Nick asc) inner
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				WHERE userId like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				WHERE userNick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				WHERE userName like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				WHERE userId like '%'||#{keyword}||'%' OR userNick like '%'||#{keyword}||'%' OR userName like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+		) inner2)
+		WHERE idx BETWEEN #{startContent} AND #{endContent}
+	</select>
+	
+	
+	<select id="getReportListCount" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		<choose>
+			<when test="reportMenu.equals('storyBoard')">
+				from story_board sb, story_report sr, member m 
+				WHERE sb.idx = sr.board_idx
+				AND sr.user_id = m.user_id
+				AND sb.available != '1'
+				AND sb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('storyBoardComment')">
+				from story_comment sc, story_comment_report scr, member m
+				WHERE sc.idx = scr.comment_idx
+				AND scr.user_id = m.user_id
+				AND sc.available != '1'
+				AND sc.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('photoBoard')">
+				from photo_board pb, photo_report pr, member m 
+				WHERE pb.idx = pr.board_idx
+				AND pr.user_id = m.user_id
+				AND pb.available != '1'
+				AND pb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('photoBoardComment')">
+				from photo_comment pc, photo_comment_report pcr, member m 
+				WHERE pc.idx = pcr.comment_idx
+				AND pcr.user_id = m.user_id
+				AND pc.available != '1'
+				AND pc.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('mediaBoard')">
+				from media_board mb, media_report mr, member m 
+				WHERE mb.idx = mr.board_idx
+				AND mr.user_id = m.user_id
+				AND mb.available != '1'
+				AND mb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('mediaBoardComment')">
+				from media_comment mc, media_comment_report mcr, member m 
+				WHERE mc.idx = mcr.comment_idx
+				AND mcr.user_id = m.user_id
+				AND mc.available != '1'
+				AND mc.user_id = #{userId}
+			</when>
+		</choose>
+	</select>	
+	
+	<select id="getReportList" parameterType="java.util.Map" resultType="ReportListDTO">
+		SELECT inner.* FROM (
+		<choose>
+			<when test="reportMenu.equals('storyBoard')">
+				select rownum idx, sb.idx targetIdx, sb.title reportTarget, sr.content reportContent, m.user_Nick reporter, sr.wdate reportTime
+				from story_board sb, story_report sr, member m 
+				WHERE sb.idx = sr.board_idx
+				AND sr.user_id = m.user_id
+				AND sb.available != '1'
+				AND sb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('storyBoardComment')">
+				select rownum idx, sc.idx targetIdx, sc.content reportTarget, scr.content reportContent, m.user_Nick reporter, scr.wdate reportTime
+				from story_comment sc, story_comment_report scr, member m
+				WHERE sc.idx = scr.comment_idx
+				AND scr.user_id = m.user_id
+				AND sc.available != '1'
+				AND sc.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('photoBoard')">
+				select rownum idx, pb.idx targetIdx, pb.title reportTarget, pr.content reportContent, m.user_Nick reporter, pr.wdate reportTime
+				from photo_board pb, photo_report pr, member m 
+				WHERE pb.idx = pr.board_idx
+				AND pr.user_id = m.user_id
+				AND pb.available != '1'
+				AND pb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('photoBoardComment')">
+				select rownum idx, pc.idx targetIdx, pc.content reportTarget, pcr.content reportContent, m.user_Nick reporter, pcr.wdate reportTime
+				from photo_comment pc, photo_comment_report pcr, member m 
+				WHERE pc.idx = pcr.comment_idx
+				AND pcr.user_id = m.user_id
+				AND pc.available != '1'
+				AND pc.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('mediaBoard')">
+				select rownum idx, mb.idx targetIdx, mb.title reportTarget, mr.content reportContent, m.user_Nick reporter, mr.wdate reportTime
+				from media_board mb, media_report mr, member m 
+				WHERE mb.idx = mr.board_idx
+				AND mr.user_id = m.user_id
+				AND mb.available != '1'
+				AND mb.user_id = #{userId}
+			</when>
+			<when test="reportMenu.equals('mediaBoardComment')">
+				select rownum idx, mc.idx targetIdx, mc.content reportTarget, mcr.content reportContent, m.user_Nick reporter, mcr.wdate reportTime
+				from media_comment mc, media_comment_report mcr, member m 
+				WHERE mc.idx = mcr.comment_idx
+				AND mcr.user_id = m.user_id
+				AND mc.available != '1'
+				AND mc.user_id = #{userId}
+			</when>
+		</choose>
+		ORDER BY reportTime desc) inner
+		WHERE idx BETWEEN #{startContent} AND #{endContent}
+	</select>
+	
+	
+	<resultMap type="java.util.Map" id="targetDetail">
+		<result column="title" property="title"/>
+		<result column="content" property="content"/>
+	</resultMap>
+	
+	<select id="getReportTargetDetail" parameterType="int" resultMap="targetDetail">
+		SELECT title, content 
+		FROM
+		<choose>
+			<when test="reportMenu.equals('storyBoard')">story_board</when>
+			<when test="reportMenu.equals('photoBoard')">photo_board</when>
+			<when test="reportMenu.equals('mediaBoard')">photo_board</when>
+		</choose>
+		WHERE idx = #{targetIdx}
+		
+	</select>
+	
+	<resultMap type="java.util.Map" id="reportCountDetail">
+		<result column="sbrCount" property="sbrCount"/>
+		<result column="scrCount" property="scrCount"/>
+		<result column="pbrCount" property="pbrCount"/>
+		<result column="pcrCount" property="pcrCount"/>
+		<result column="mbrCount" property="mbrCount"/>
+		<result column="mcrCount" property="mcrCount"/>
+	</resultMap>
+	
+	<select id="getReportCountDetail" parameterType="String" resultMap="reportCountDetail">
+	SELECT sb.r sbrCount, sc.r scrCount, pb.r pbrCount, pc.r pcrCount, mb.r mbrCount, mc.r mcrCount 
+	FROM (select count(*) r from story_board a, story_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) sb, 
+	(select count(*) r from story_comment a, story_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) sc,
+	(select count(*) r from photo_board a, photo_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) pb,
+	(select count(*) r from photo_comment a, photo_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) pc,
+	(select count(*) r from media_board a, media_report b where a.idx=b.board_idx and a.user_id=#{userId} and a.available=0) mb,
+	(select count(*) r from media_comment a, media_comment_report b where a.idx=b.comment_idx and a.user_id=#{userId} and a.available=0) mc
+	</select>
+	
+	
+	<!--@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@[ 탈 퇴 회 원 ]@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@-->
+	
+	
+	
+	<select id="getResignTotalCount" parameterType="java.util.Map" resultType="int">
+		SELECT count(*)
+		FROM member
+		WHERE user_permission = 99
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				AND user_nick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				AND user_name like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				AND user_id like '%'||#{keyword}||'%' OR user_nick like '%'||#{keyword}||'%' OR user_name like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+	</select>
+	
+	<select id="getResignMemberList" parameterType="java.util.Map" resultType="ResignListDTO">
+		SELECT * FROM
+		(SELECT rownum as idx, inner.* FROM 
+		(SELECT user_id as userId, user_nick as userNick, user_name as userName, user_permission as userPermission, user_indate as userIndate, trunc(sysdate-user_indate) as timeOut
+		FROM member 
+		WHERE user_permission = 99
+		<choose>
+			<when test="searchOption.equals('userId') and keyword != ''">
+				AND user_Id like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userNick') and keyword != ''">
+				AND user_Nick like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption.equals('userName') and keyword != ''">
+				AND user_Name like '%'||#{keyword}||'%'
+			</when>
+			<when test="searchOption == '' and keyword != ''">
+				AND user_Id like '%'||#{keyword}||'%' OR user_Nick like '%'||#{keyword}||'%' OR user_Name like '%'||#{keyword}||'%'
+			</when>
+		</choose>
+		ORDER BY timeOut desc, user_indate desc, user_Name asc, user_id asc, user_Nick asc) inner)
+		WHERE idx BETWEEN #{startContent} AND #{endContent}
+	</select>
+	
+	<update id="setResignMemberCancel" parameterType="String">
+		UPDATE member
+		SET 
+		user_permission = 1,
+		user_indate = sysdate,
+		user_suspend = ' '
+        WHERE user_id=#{userId}
+	</update>
+	
+	<delete id="removeMember" parameterType="String">
+		DELETE FROM member
+		WHERE user_id = #{userId}
+	</delete>
+	
+	
+</mapper>
